@@ -1,0 +1,10 @@
+# 统一换行符，避免 Windows / macOS 协作出无意义的整文件 diff
+* text=auto
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.sh text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.md text eol=lf

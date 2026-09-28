@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SIMS 用电查询</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">⚡</span>
+    <div>
+      <h1>宿舍用电查询</h1>
+      <p class="sub">智能集中式电能计量系统 · <span id="roomTag">—</span></p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <!-- 「学校原页面」指向本机 /school 中转页（见 loadConfig()）：
+         后端把 client+buildingId+roomName 拼成登录表单自动 POST，
+         点开就是自己宿舍那个页面，不用重复登录。 -->
+    <a id="linkOriginal" class="btn ghost" target="_blank" rel="noopener">↗ 学校原页面</a>
+    <!-- 缴费页是微信专属的（不带微信 UA 会被强制弹"请在微信客户端打开"），
+         所以这里给的是二维码而不是链接，用手机微信扫 -->
+    <button id="openPayQr" class="btn ghost" hidden>📱 扫码购电</button>
+    <button id="openConfig" class="btn ghost">⚙ 修改宿舍</button>
+  </div>
+</header>
+
+<!-- 后台进程比页面旧时在这里报警（改了代码没重启服务就会出现这种情况） -->
+<div id="staleBanner" class="banner err hidden"></div>
+
+<main class="container">
+  <section class="toolbar">
+    <label>开始日期<input type="date" id="beginDate"></label>
+    <label>结束日期<input type="date" id="endDate"></label>
+    <!-- 上限跟着标签页走：用电只结算到昨天、购电可到今天。文案由 applyDateLimits() 填 -->
+    <span id="dateCapHint" class="date-hint"></span>
+    <button class="btn range-btn" data-range="7">近7天</button>
+    <button class="btn range-btn" data-range="30">近30天</button>
+    <button class="btn range-btn" data-range="90">近90天</button>
+    <button id="refresh" class="btn primary">查询</button>
+    <span id="status" class="status"></span>
+  </section>
+
+  <section class="cards">
+    <div class="card">
+      <div class="card-label">当前余额</div>
+      <div class="card-value"><span id="vRemain">—</span><small>度</small></div>
+      <!-- 这个余额是"哪一天结算出来的"：学校每天 23:59 才存一次快照，所以它天然带日期。
+           标题不动，日期只放在下面一行小字里（由 render() 填，无数据时整行隐藏）。 -->
+      <div class="card-sub" id="vRemainAsOf" hidden></div>
+    </div>
+    <!-- 「今日用电」默认不显示。服务端每天 23:59 才结算出今天的记录，
+         白天根本不存在今天这一行（整个系统只有 login.do / selectList.do 两个接口，
+         没有实时读数）。爬不到这个数据就整张卡片不出现，不拿昨天的数冒充。
+         只有 today_use 有真值时 render() 才把它放出来。 -->
+    <div class="card" id="cardToday" hidden>
+      <div class="card-label">今日用电</div>
+      <div class="card-value"><span id="vToday">—</span><small>度</small></div>
+    </div>
+    <div class="card">
+      <div class="card-label">日均用电</div>
+      <div class="card-value"><span id="vAvg">—</span><small>度</small></div>
+    </div>
+    <div class="card">
+      <div class="card-label">预计可用</div>
+      <div class="card-value"><span id="vEst">—</span><small>天</small></div>
+    </div>
+  </section>
+
+  <section class="charts">
+    <div class="panel">
+      <h2>余额趋势</h2>
+      <canvas id="lineChart"></canvas>
+    </div>
+    <div class="panel">
+      <h2>每日用电</h2>
+      <canvas id="barChart"></canvas>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>历史记录</h2>
+      <div class="tabs">
+        <button class="tab active" data-tab="usage">用电记录</button>
+        <button class="tab" data-tab="purchase">购电记录</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="history">
+        <thead><tr><th>日期</th><th>剩余电量(度)</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <table id="purchase" class="hidden">
+        <thead><tr id="purchaseHead"></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <p id="purchaseEmpty" class="empty hidden">近 180 天暂无购电记录</p>
+  </section>
+</main>
+
+<div id="configModal" class="modal hidden">
+  <div class="modal-box">
+    <h2>设置宿舍</h2>
+    <p class="hint">照着 1 → 2 → 3 点一遍就行，房间号就在你宿舍门上。</p>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">1</span>连上学校的电费系统</div>
+      <div class="step-body">
+        <button id="cfgDetect" class="btn primary">🔍 自动检测</button>
+        <span id="detectMsg" class="inline-msg"></span>
+        <p class="hint">电脑要先连校园网（WiFi 或网线）。检测成功会自己填好校区和楼栋列表。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">2</span>选校区</div>
+      <div class="step-body">
+        <select id="cfgClient"><option value="">（点上面的自动检测）</option></select>
+        <p class="hint">每个校区的楼栋表不一样，先选校区，第 3 步的楼栋才对得上。</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">3</span>选楼栋 + 填房间号</div>
+      <div class="step-body">
+        <div class="form-row">
+          <label>楼栋
+            <select id="cfgBuilding"><option value="">请选择楼栋</option></select>
+          </label>
+          <label>房间号
+            <input id="cfgRoom" type="text" inputmode="numeric" placeholder="例如 301" autocomplete="off">
+          </label>
+        </div>
+        <p class="hint">按层拆开的楼栋（如 3-6 层 / 7-10 层）要选准自己住的那一段，房号不通用。</p>
+      </div>
+    </div>
+
+    <details class="more">
+      <summary>高级设置（一般不用改）</summary>
+      <label>服务器地址<input id="cfgServer" placeholder="http://192.168.84.3:9090/cgcSims"></label>
+      <label>默认天数<input id="cfgDays" type="number" value="30"></label>
+      <label>购电网址（选填，填了顶栏才出现「扫码购电」）
+        <input id="cfgPurchaseUrl" placeholder="例如 微信缴费页链接">
+      </label>
+    </details>
+
+    <div class="modal-actions">
+      <button id="cfgCancel" class="btn ghost">稍后</button>
+      <button id="cfgSave" class="btn primary">保存并查询</button>
+    </div>
+    <p id="cfgMsg" class="status"></p>
+  </div>
+</div>
+
+<!-- 购电二维码。顶栏的「扫码购电」点的就是这个 -->
+<div id="payQrModal" class="modal hidden">
+  <div class="modal-box qr-box">
+    <h2>扫码购电</h2>
+    <p class="hint">用微信扫这个码，直接进宿舍电费缴费页。</p>
+    <div class="qr-wrap"><img id="payQr" alt="缴费页二维码"></div>
+    <p id="payQrErr" class="status err hidden"></p>
+    <p class="hint qr-tip">
+      这个页面只在微信里能打开，电脑浏览器点过去只会看到「请在微信客户端打开链接」。
+      想直接跳的话，也可以<a id="payQrLink" target="_blank" rel="noopener">在新窗口打开</a>。
+    </p>
+    <div class="modal-actions">
+      <button id="payQrClose" class="btn primary">知道了</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

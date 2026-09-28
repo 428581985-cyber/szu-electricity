@@ -1,0 +1,5 @@
+flask>=3.0
+requests>=2.31
+beautifulsoup4>=4.12
+# 只用于把「购电网址」渲染成二维码 SVG（纯 Python，不需要 Pillow）；缺了只是那条按钮报错
+qrcode>=7.4
