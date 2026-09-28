@@ -8,9 +8,7 @@
 > 学校系统每天只在 **23:59** 结算一次，所以「今天的用电」在当天是查不到的（这不是 bug，见文末 FAQ）。
 > 服务端的脾气我整理在 [`docs/逆向笔记.md`](docs/逆向笔记.md)（想改代码再看）。
 
-<!-- 截图：跑起来后按 Win+Shift+S 截一张，存成 docs/screenshot.png，把下面这行取消注释
-![界面](docs/screenshot.png)
--->
+![界面截图](docs/screenshot.png)
 
 ## 三步搞定（不需要看得懂代码）
 
