@@ -14,10 +14,15 @@
 
 ### 用法 A：下载 exe 直接双击（最省事，不碰 Python）
 
-1. 打开本仓库右侧的 **[Releases](../../releases)**，下载最新的 **`宿舍电费查询.exe`**（约 37 MB）
+1. 打开本仓库右侧的 **[Releases](../../releases)**，下载最新的 **`szu-electricity.exe`**
+   （约 37 MB；附件上标着「宿舍电费查询 · Windows 免安装版」）
 2. 把它放进一个自己的文件夹（例如 `D:\电费查询\`），**双击**
-3. 浏览器会自动打开面板；第一次会让你选校区、楼栋、填房间号（见下面的「第 2 步」）
+3. 浏览器会自动打开面板；第一次会让你选校区、楼栋、填房间号（见下面的「配置宿舍」）
 4. 想以后好找：把 exe 拖到桌面，或右键 → 发送到 → 桌面快捷方式
+
+> exe 文件名是英文（`szu-electricity.exe`），因为 **GitHub 的 Release 附件名不支持中文** —— 
+> 用 API/命令行上传时中文名会被静默改写成 `default.exe`（label 倒是能用中文）。
+> 下载到本地后你随便改名，不影响运行。
 
 > 这个 exe **自带 Python 运行时**，电脑上不用装 Python、不用装任何东西。
 > `config.json` 和 `data\` 会生成在 **exe 所在的文件夹**里（你的配置和缓存，删掉就恢复初始状态）。
@@ -140,6 +145,9 @@ pyinstaller --noconfirm --onefile --console \
 打出来的单文件自带 Python 运行时（约 37 MB），扔到没装 Python 的电脑上双击就能跑。
 Windows 上 `--add-data` 的源/目标用 `;` 分隔；若 `--specpath` 指向别处，
 源路径要写**绝对路径**（相对路径按 spec 文件所在目录解析，否则报 `Unable to find 'static'`）。
+
+> 用命令行/API 往 Release 传附件时，**附件名必须是 ASCII**：中文名会被 GitHub 静默改成
+> `default.exe`（`label` 字段倒是支持中文）。web 网页拖拽上传没这个限制。
 
 ## API
 
