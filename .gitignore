@@ -17,3 +17,9 @@ venv/
 # 设 SIMS_DEBUG=1 时爬虫会把原始响应写盘，默认关闭
 *.response.html
 *.log
+
+# ── 打包产物（PyInstaller）─────────────────────────────────
+# exe 不进仓库：它是发布用的附件，体积大且可随时重新构建
+dist/
+build/
+*.spec

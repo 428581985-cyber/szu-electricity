@@ -10,9 +10,25 @@
 
 ![界面截图](docs/screenshot.png)
 
-## 三步搞定（不需要看得懂代码）
+## 两种用法，挑一个
 
-### 第 0 步：Python（脚本会替你搞定）
+### 用法 A：下载 exe 直接双击（最省事，不碰 Python）
+
+1. 打开本仓库右侧的 **[Releases](../../releases)**，下载最新的 **`宿舍电费查询.exe`**（约 37 MB）
+2. 把它放进一个自己的文件夹（例如 `D:\电费查询\`），**双击**
+3. 浏览器会自动打开面板；第一次会让你选校区、楼栋、填房间号（见下面的「第 2 步」）
+4. 想以后好找：把 exe 拖到桌面，或右键 → 发送到 → 桌面快捷方式
+
+> 这个 exe **自带 Python 运行时**，电脑上不用装 Python、不用装任何东西。
+> `config.json` 和 `data\` 会生成在 **exe 所在的文件夹**里（你的配置和缓存，删掉就恢复初始状态）。
+>
+> ⚠️ 第一次运行 Windows 可能弹「Windows 已保护你的电脑」（SmartScreen）—— 因为 exe **没有买代码签名证书**，
+> 这是所有个人开源软件的通病。点 **「更多信息」→「仍要运行」** 即可。介意的话用下面的用法 B 跑源码。
+> 个别杀毒软件也可能误报，同样是"未签名 exe"导致的，加白名单即可。
+
+### 用法 B：跑源码（要装 Python，但能自己改代码）
+
+#### 第 0 步：Python（脚本会替你搞定）
 
 **什么都不用装**。双击 `start.bat` 后它会自己找 Python：PATH 里的、py 启动器、常见安装目录
 （`%LOCALAPPDATA%\Programs\Python` 等）都会扫一遍。**真的一个都没找到时**，它会问你一句
@@ -20,7 +36,7 @@
 （约 25 MB，只装给当前用户，**不需要管理员权限**）；按 `N` 就给你官网地址自己装。
 装了以后不会再问——它认得已有的 Python。
 
-### 第 1 步：连上校园网，启动
+#### 第 1 步：连上校园网，启动
 
 把项目文件夹弄到电脑上（本页右上角绿色 **`Code` → `Download ZIP`**，解压后进那个文件夹），
 然后**双击 `start.bat`**。
@@ -31,7 +47,7 @@
 > 不是 Windows、或者想用命令行：`pip install -r requirements.txt` 然后 `python app.py`。
 > 端口可用环境变量改：`set PORT=9000 && python app.py`。
 
-### 第 2 步：跟着弹窗点三下
+## 配置宿舍（两种用法都一样）
 
 第一次打开会自动弹出「设置宿舍」，照着数字点：
 
@@ -90,6 +106,9 @@
 | 桌面出现「宿舍电费查询」快捷方式 | 这是**首次运行**自动建的（找不到才建，已存在会跳过）。不想要就删掉，不影响程序 |
 | 没装 Python 会怎样 | 脚本会找一遍（PATH、py 启动器、常见安装目录），都没有就问你一句；按 `Y` 自动从华为云镜像下载官方安装包装上（仅当前用户、不需要管理员），按 `N` 给你官网地址 |
 | 想给别的学校用 | 改 `scraper.py` 的楼栋表 + `app.py` 里的 `DEFAULT_SERVERS`，页面「高级设置」也能手填服务器地址 |
+| 双击 exe 弹「Windows 已保护你的电脑」 | exe 没买代码签名证书（个人开源项目的通病）。点「更多信息」→「仍要运行」；杀软误报同理，加白名单 |
+| exe 双击后一闪而过 | 换到**一个普通文件夹**再试（别放在压缩包预览里、别放网络盘）。程序会自己开一个黑色命令行窗口，**那个窗口就是服务本体，关掉它就停了** |
+| 想换 server / 校区 | 两种方式都一样：页面右上角「⚙ 修改宿舍」→「自动检测」重来一遍 |
 
 ## 技术栈与目录
 
@@ -97,13 +116,30 @@
 
 ```
 app.py                Flask 服务：静态页 + JSON API + /school 中转页 + 二维码渲染 + /api/detect 自检
+paths.py              目录约定：打包后 static/ 走解包目录，config.json / data 落在 exe 旁边
 scraper.py            抓取层：登录、查询、翻页、解析 gb2312 表格、校区/楼栋表
 store.py              本地缓存（按「宿舍 + 日期区间 + 类型」分 key）
 reminder.py           余额告警，单次执行，交给计划任务
-static/               index.html / app.js / style.css
+static/               index.html / app.js / style.css / favicon.ico
+tools/make_icon.py    用 Pillow 生成 favicon.ico（exe 图标与网页标签页图标共用）
 docs/逆向笔记.md        服务端行为与踩坑记录（改代码前先看）
 config.example.json   配置示例（真正的 config.json 不进仓库，含宿舍信息）
+dist/                 打包产物（exe），不进仓库
 ```
+
+### 自己打包 exe
+
+```bash
+pip install -r requirements.txt pyinstaller
+python tools/make_icon.py                      # 生成图标（改配色/形状就改这个脚本）
+pyinstaller --noconfirm --onefile --console \
+  --name szu-dorm-electricity --icon static/favicon.ico \
+  --add-data "static;static" app.py             # 产物在 dist/
+```
+
+打出来的单文件自带 Python 运行时（约 37 MB），扔到没装 Python 的电脑上双击就能跑。
+Windows 上 `--add-data` 的源/目标用 `;` 分隔；若 `--specpath` 指向别处，
+源路径要写**绝对路径**（相对路径按 spec 文件所在目录解析，否则报 `Unable to find 'static'`）。
 
 ## API
 

@@ -17,6 +17,7 @@ import datetime
 import json
 import os
 import re
+import sys
 
 import requests
 from flask import Flask, Response, jsonify, request, send_from_directory
@@ -42,9 +43,12 @@ from scraper import (
     resolve_dorm,
 )
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+# ── 目录约定（见 paths.py）：打包成 exe 后 static/ 在临时解包目录，
+#    config.json / data/ 必须落在 exe 旁边。
+from paths import BASE, FROZEN, RES_DIR  # noqa: E402
+
 CONFIG_PATH = os.path.join(BASE, "config.json")
-STATIC = os.path.join(BASE, "static")
+STATIC = os.path.join(RES_DIR, "static")
 
 # 后端接口版本。前端 `static/app.js` 里有同名的 EXPECT_VERSION。
 #
@@ -562,6 +566,9 @@ def put_config():
 @app.route("/api/records")
 def api_records():
     cfg = load_config()
+    err = ready_or_error(cfg)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
     begin = request.args.get("begin")
     end = request.args.get("end") or datetime.date.today().strftime("%Y-%m-%d")
     rtype = int(request.args.get("type", "2"))
@@ -601,9 +608,21 @@ def api_cached():
     )
 
 
+def ready_or_error(cfg):
+    """配置没填好就别去抓学校接口，直接返回一句人话。
+
+    以前这种情况会在各接口的 except Exception 里变成 500「查询失败：…」，
+    对第一次打开（还没配宿舍）的人来说等于"坏了"。现在统一 400 + 明确指引。
+    """
+    return validate_config(dict(cfg))     # None = 配置 OK
+
+
 @app.route("/api/trend")
 def api_trend():
     cfg = load_config()
+    err = ready_or_error(cfg)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
     begin = request.args.get("begin")
     # 默认结束日期 = 昨天：今天的用电行要等 23:59 结算才存在，把今天算进来只会多一天空数据
     end = request.args.get("end") or yesterday_iso()
@@ -649,6 +668,9 @@ def api_trend():
 @app.route("/api/purchase")
 def api_purchase():
     cfg = load_config()
+    err = ready_or_error(cfg)
+    if err:
+        return jsonify({"ok": False, "error": err}), 400
     today = datetime.date.today().strftime("%Y-%m-%d")
     begin = request.args.get("begin")
     end = request.args.get("end") or today
@@ -689,7 +711,36 @@ def api_purchase():
         return jsonify({"ok": False, "error": f"查询失败：{e}"}), 500
 
 
+def open_browser_later(url: str, delay: float = 1.2) -> None:
+    """过一会儿自动打开浏览器（打包成 exe 时用户双击就该看到页面）。
+
+    用线程 + 延迟：Flask 还没监听就先打开会白页。测试时可用环境变量
+    SIMS_NO_BROWSER=1 或命令行 --no-browser 关掉。
+    """
+    if os.environ.get("SIMS_NO_BROWSER") == "1" or "--no-browser" in sys.argv:
+        return
+
+    import threading
+    import webbrowser
+
+    def _open():
+        import time
+        time.sleep(delay)
+        try:
+            webbrowser.open(url)
+        except Exception:  # noqa: BLE001  打不开浏览器不该影响服务
+            pass
+
+    threading.Thread(target=_open, daemon=True).start()
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8788))
+    url = f"http://127.0.0.1:{port}"
+    print(f"[*] 用电查询服务已启动：{url}")
+    print("[*] 关掉这个窗口就是停止服务。")
+    if FROZEN:
+        print("[*] 提示：把这个 exe 拖到桌面（或右键 → 发送到 → 桌面快捷方式），以后好找。")
+    open_browser_later(url)
     app.run(host="127.0.0.1", port=port, debug=False)
 

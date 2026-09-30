@@ -8,7 +8,8 @@ import datetime
 import json
 import os
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+from paths import BASE
+
 CACHE_DIR = os.path.join(BASE, "data")
 CACHE_PATH = os.path.join(CACHE_DIR, "cache.json")
 
